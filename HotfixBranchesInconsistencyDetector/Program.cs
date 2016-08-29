@@ -11,6 +11,7 @@ namespace HotfixBranchesInconsistencyDetector
     {
         static void Main(string[] args)
         {
+            // Comment in branch hotfix-2
             string repoRoot = getRepoRootDir();
             Console.WriteLine(repoRoot);
             Console.ReadLine();
