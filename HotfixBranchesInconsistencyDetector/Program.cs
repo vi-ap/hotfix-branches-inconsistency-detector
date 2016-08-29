@@ -15,7 +15,6 @@ namespace HotfixBranchesInconsistencyDetector
             string repoRoot = getRepoRootDir();
             using (var repo = new Repository(repoRoot))
             {
-                Console.WriteLine(repo.Head.Name);
                 checkAllPreviousHotfixBranches(repo);
             }
 
@@ -25,9 +24,9 @@ namespace HotfixBranchesInconsistencyDetector
         private static void checkAllPreviousHotfixBranches(Repository repo)
         {
             repo.Network.Fetch(repo.Network.Remotes["origin"]);
-            foreach(Branch branch in repo.Branches.Where(b => b.IsRemote && !b.Name.Contains(repo.Head.Name)))
+            foreach(Branch branch in repo.Branches.Where(b => b.IsRemote && b.Name.StartsWith("origin/hotfix-") && !b.Name.Contains(repo.Head.Name)))
             {
-                Console.WriteLine("Checking branch " + branch.CanonicalName);
+                Console.WriteLine("\nChecking branch: " + branch.Name);
                 HashSet<string> missingCommits = new HashSet<string>();
                 if(checkCurrentBranchAgainstPrevious(repo, branch, out missingCommits))
                 {
@@ -51,19 +50,16 @@ namespace HotfixBranchesInconsistencyDetector
             // git log prevHotfix..HEAD - all commits in HEAD not in prevHotfix
             prevHotfixCommits = new HashSet<string>();
 
-            var filter = new CommitFilter { Since = repo.Head, Until = prevHotfix };
+            var filter = new CommitFilter { Since = prevHotfix, Until = repo.Head };
             foreach(Commit commit in repo.Commits.QueryBy(filter))
             {
                 prevHotfixCommits.Add(commit.Message);
             }
 
-            filter = new CommitFilter { Since = prevHotfix, Until = repo.Head };
+            filter = new CommitFilter { Since = repo.Head, Until = prevHotfix };
             foreach(Commit commit in repo.Commits.QueryBy(filter))
             {
-                if(prevHotfixCommits.Contains(commit.Message))
-                {
-                    prevHotfixCommits.Remove(commit.Message);
-                }
+                prevHotfixCommits.Remove(commit.Message);
             }
 
             if(prevHotfixCommits.Count > 0)
