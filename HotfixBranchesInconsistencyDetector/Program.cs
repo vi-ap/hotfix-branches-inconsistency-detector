@@ -28,23 +28,29 @@ namespace HotfixBranchesInconsistencyDetector
             foreach(Branch branch in repo.Branches.Where(b => b.IsRemote && !b.Name.Contains(repo.Head.Name)))
             {
                 Console.WriteLine("Checking branch " + branch.CanonicalName);
-                if(checkCurrentBranchAgainstPrevious(repo, branch))
+                HashSet<string> missingCommits = new HashSet<string>();
+                if(checkCurrentBranchAgainstPrevious(repo, branch, out missingCommits))
                 {
                     Console.WriteLine("Branch OK");
                 }
                 else
                 {
                     Console.WriteLine("Branch contains commits missing from current branch");
+                    foreach(string missing in missingCommits)
+                    {
+                        Console.WriteLine(missing);
+                    }
                 }
             }
         }
 
         // returns false if there are commits in the previous branch that are missing from the current
-        private static bool checkCurrentBranchAgainstPrevious(Repository repo, Branch prevHotfix)
+        private static bool checkCurrentBranchAgainstPrevious(Repository repo, Branch prevHotfix, out HashSet<string> prevHotfixCommits)
         {
             // git log HEAD..prevHotfix - all commits in prevHotfix not in HEAD
             // git log prevHotfix..HEAD - all commits in HEAD not in prevHotfix
-            HashSet<string> prevHotfixCommits = new HashSet<string>();
+            prevHotfixCommits = new HashSet<string>();
+
             var filter = new CommitFilter { Since = repo.Head, Until = prevHotfix };
             foreach(Commit commit in repo.Commits.QueryBy(filter))
             {
