@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LibGit2Sharp;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,10 +13,61 @@ namespace HotfixBranchesInconsistencyDetector
         static void Main(string[] args)
         {
             string repoRoot = getRepoRootDir();
-            Console.WriteLine(repoRoot);
+            using (var repo = new Repository(repoRoot))
+            {
+                Console.WriteLine(repo.Head.Name);
+                checkAllPreviousHotfixBranches(repo);
+            }
+
             Console.ReadLine();
         }
-        
+
+        private static void checkAllPreviousHotfixBranches(Repository repo)
+        {
+            repo.Network.Fetch(repo.Network.Remotes["origin"]);
+            foreach(Branch branch in repo.Branches.Where(b => b.IsRemote && !b.Name.Contains(repo.Head.Name)))
+            {
+                Console.WriteLine("Checking branch " + branch.CanonicalName);
+                if(checkCurrentBranchAgainstPrevious(repo, branch))
+                {
+                    Console.WriteLine("Branch OK");
+                }
+                else
+                {
+                    Console.WriteLine("Branch contains commits missing from current branch");
+                }
+            }
+        }
+
+        // returns false if there are commits in the previous branch that are missing from the current
+        private static bool checkCurrentBranchAgainstPrevious(Repository repo, Branch prevHotfix)
+        {
+            // git log HEAD..prevHotfix - all commits in prevHotfix not in HEAD
+            // git log prevHotfix..HEAD - all commits in HEAD not in prevHotfix
+            HashSet<string> prevHotfixCommits = new HashSet<string>();
+            var filter = new CommitFilter { Since = repo.Head, Until = prevHotfix };
+            foreach(Commit commit in repo.Commits.QueryBy(filter))
+            {
+                prevHotfixCommits.Add(commit.Message);
+            }
+
+            filter = new CommitFilter { Since = prevHotfix, Until = repo.Head };
+            foreach(Commit commit in repo.Commits.QueryBy(filter))
+            {
+                if(prevHotfixCommits.Contains(commit.Message))
+                {
+                    prevHotfixCommits.Remove(commit.Message);
+                }
+            }
+
+            if(prevHotfixCommits.Count > 0)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
         private static string getRepoRootDir()
         {
             string currentDirectory = Directory.GetCurrentDirectory();
@@ -24,7 +76,6 @@ namespace HotfixBranchesInconsistencyDetector
 
         private static string getRepoRootDir(string currentDirectory)
         {
-            Console.WriteLine(currentDirectory);
             string gitDirPath = Path.Combine(currentDirectory, ".git");
             if (Directory.Exists(gitDirPath))
             {
